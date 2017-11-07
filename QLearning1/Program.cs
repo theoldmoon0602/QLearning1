@@ -60,8 +60,10 @@ namespace QLearning1
             }
         }
 
+        // ある状態の時、次に取るべき行動を返す
         public int GetNextAction(int state, Random random = null)
         {
+            // 10% でランダムに
             if (random is null)
             {
                 random = new Random();
@@ -71,6 +73,7 @@ namespace QLearning1
                 return random.Next(actionCount);
             }
 
+            // それ以外は最善と思っている手段で
             var vs = values.ElementAt(state);
 
             int maxIndex = 0;
@@ -93,30 +96,25 @@ namespace QLearning1
     {
         static void Main(string[] args)
         {
-            // 統計をとるよ
-            List<int> actionCountsOnLastEpisode = new List<int>();
-            List<double> rewardsOnLastEpisode = new List<double>();
-
-            // 試行ごとのエピソード数
-            const int EpisodeNum = 1000;
+            const int EpisodeNum = 1000; // 試行ごとのエピソード数
             const int N = 100; // N回回して統計をとる
 
-            int[] allActionCounts = new int[EpisodeNum];
-            double[] allSumOfRewards = new double[EpisodeNum];
-
+            List<int> actionCounts = new List<int>();
+            List<double> rewards = new List<double>();
+            double[,] rewardRates = new double[EpisodeNum, N];
 
             // N回回してみる
             for (int c = 0; c < N; c++)
             {
                 // 毎回変わればなんでもいい
-                Random random = new Random(c+10000);
-
-                int actionCounts = 0;
-                double sumOfRewards = 0;
+                Random random = new Random(c + 10000);
 
                 // very magic numbers
                 QValues qValues = new QValues(10, 3, 0.1, 0.3);
                 Problem1.initState();
+
+                long allActionCount = 0; // 累計行動回数
+                double sumOfRewards = 0; // 累計獲得報酬
 
 
                 // エピソードを回す
@@ -124,66 +122,51 @@ namespace QLearning1
                 {
                     // 初期化
                     Problem1.setState(0);
-
-                    int actionCount = 0;
                     double reward = 0;
+                    int actionCount = 0;
 
                     // 学習
                     while (!Problem1.getStateIsGoal())
                     {
-                        int s = Problem1.getState();
-                        int act = qValues.GetNextAction(s, random);
+                        int currentState = Problem1.getState();
+                        int act = qValues.GetNextAction(currentState, random);
                         reward = Problem1.doAction(act.ToString());
 
-                        actionCount++;
-                        sumOfRewards += reward;
-
-                        int next = Problem1.getState();
+                        int nextState = Problem1.getState();
 
                         //Console.WriteLine("Current State   ==> {0}", s);
                         //Console.WriteLine("Selected Action ==> {0}", act);
                         //Console.WriteLine("Next State is   ==> {0}", next);
-                        qValues.Update(s, act, next, reward);
+                        qValues.Update(currentState, act, nextState, reward);
+                        actionCount++;
 
-                        if (Problem1.getStateIsGoal()) { break; }
+                        allActionCount++;
+                        sumOfRewards += reward;
                     }
-                    //Console.WriteLine("GOAL!!!\n\n");
 
-                    actionCounts += actionCount;
-                    sumOfRewards += reward;
-                    if (i + 1 == EpisodeNum)
+                    // 最終エピソードにおける行動実行回数と獲得報酬を見る
+                    if (i+1 == EpisodeNum)
                     {
-                        actionCountsOnLastEpisode.Add(actionCount);
-                        rewardsOnLastEpisode.Add(reward);
+                        actionCounts.Add(actionCount);
+                        rewards.Add(reward);
                     }
-                    if (c == 0) { 
-                        allActionCounts[i] = actionCounts;
-                        allSumOfRewards[i] = sumOfRewards;
-                    }
+                    rewardRates[i, c] = sumOfRewards / allActionCount;
 
                 }
                 //qValues.Show();
             }
+            Console.WriteLine("Avg of actionCount: {0}", actionCounts.Average());
+            Console.WriteLine("Avg of reward: {0}", rewards.Average());
 
-            List<double> rewardRates = allActionCounts.Zip(allSumOfRewards, (count, reward) => reward / count).ToList();
-
-            // 統計値を出力
-            using (StreamWriter sw = new StreamWriter("output.csv"))
+            for (int i = 0; i < EpisodeNum; i++) 
             {
-                sw.Write("Average of action count on last episodes,");
-                sw.Write(actionCountsOnLastEpisode.Average());
-                sw.WriteLine(",");
-
-                sw.Write("Average of reward on last episodes,");
-                sw.Write(rewardsOnLastEpisode.Average());
-                sw.WriteLine(",");
-
-                sw.WriteLine("reward rate,");
-                foreach (var rewardRate in rewardRates)
+                double rewardRateAvg = 0;
+                for (int c = 0; c < N; c++)
                 {
-                    sw.Write(rewardRate);
-                    sw.WriteLine(",");
+                    rewardRateAvg += rewardRates[i, c];
                 }
+                rewardRateAvg /= N;
+                Console.WriteLine("{0},", rewardRateAvg);
             }
         }
     }
